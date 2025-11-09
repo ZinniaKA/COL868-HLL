@@ -13,8 +13,8 @@ import os # Added for creating directories
 # --- Configuration ---
 # This prefix must match the one used in the SQL benchmark script
 EXPERIMENT_PREFIX = 'hll_add_agg' 
-INPUT_DIR = '/code/results'
-OUTPUT_DIR = f'/code/plots/{EXPERIMENT_PREFIX}'
+INPUT_DIR = './tables'
+OUTPUT_DIR = f'./plots/{EXPERIMENT_PREFIX}'
 # --- End Configuration ---
 
 # Set style
@@ -22,35 +22,6 @@ sns.set_style("whitegrid")
 plt.rcParams['figure.figsize'] = (10, 6)
 plt.rcParams['font.size'] = 10
 
-# Load data (you'll need to export from PostgreSQL first)
-# For now, creating sample data structure
-
-def create_sample_data():
-    """Create sample data if CSV files don't exist"""
-    # Exact count results
-    exact_data = {
-        'test_name': ['exact_count'] * 5,
-        'row_count': [1000000] * 5,
-        'distinct_count': [100000] * 5,
-        'duration_ms': [245.3, 243.1, 246.8, 244.5, 245.9],
-        'run_number': [1, 2, 3, 4, 5]
-    }
-    
-    # HLL results for different precisions
-    hll_data = {
-        'precision': [10]*5 + [12]*5 + [14]*5,
-        'row_count': [1000000] * 15,
-        'hll_estimate': [99234]*5 + [100123]*5 + [99987]*5,
-        'exact_count': [100000] * 15,
-        'relative_error': [0.766]*5 + [0.123]*5 + [0.013]*5,
-        'duration_ms': [45.2, 44.8, 45.5, 45.1, 44.9,
-                        52.3, 51.9, 52.7, 52.1, 52.5,
-                        67.8, 67.2, 68.1, 67.5, 67.9],
-        'storage_bytes': [1280]*5 + [5120]*5 + [20480]*5,
-        'run_number': list(range(1,6))*3
-    }
-    
-    return pd.DataFrame(exact_data), pd.DataFrame(hll_data)
 
 def plot_latency_comparison(exact_df, hll_df):
     """Plot 1: Latency comparison between exact and HLL methods"""

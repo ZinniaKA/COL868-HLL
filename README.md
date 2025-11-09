@@ -37,7 +37,7 @@ Distribution: Uniform random (not representative of real-world skew)
 docker exec -it pgdb psql -f benchmark_hll_add_agg.sql
 
 # Make graphs
-docker compose -f docker-compose.graphs.yml run --rm plotter python plot_results_add_arg.py
+docker compose -f docker-compose.graphs.yml run --rm plotter python plot_results_add_agg.py
 ```
 
 ### Experiment 2:

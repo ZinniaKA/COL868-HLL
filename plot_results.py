@@ -8,11 +8,20 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import os  # Added for directory creation
 
 # Set style
 sns.set_style("whitegrid")
 plt.rcParams['font.size'] = 11
 plt.rcParams['figure.dpi'] = 300
+
+# --- Configuration ---
+# This prefix must match the one used in the benchmark script
+EXPERIMENT_PREFIX = 'hll_add_agg'
+INPUT_DIR = './tables'
+OUTPUT_DIR = f'./plots/{EXPERIMENT_PREFIX}'
+# --- End Configuration ---
+
 
 def compute_scaling_summary(exact_df, hll_df):
     """Compute scaling summary from raw data"""
@@ -40,11 +49,14 @@ def compute_scaling_summary(exact_df, hll_df):
     return pd.DataFrame(scaling_data)
 
 def load_data():
-    """Load benchmark results from CSV files"""
+    """Load benchmark results from CSV files using configured paths"""
+    exact_csv = f'{INPUT_DIR}/{EXPERIMENT_PREFIX}_exact.csv'
+    hll_csv = f'{INPUT_DIR}/{EXPERIMENT_PREFIX}_hll.csv'
+    
     try:
-        exact_df = pd.read_csv('results_exact.csv')
-        hll_df = pd.read_csv('results_hll.csv')
-        print("✓ Loaded benchmark data")
+        exact_df = pd.read_csv(exact_csv)
+        hll_df = pd.read_csv(hll_csv)
+        print(f"✓ Loaded data from {exact_csv} and {hll_csv}")
         
         # Compute scaling summary from raw data
         scaling_df = compute_scaling_summary(exact_df, hll_df)
@@ -52,7 +64,8 @@ def load_data():
         
         return exact_df, hll_df, scaling_df
     except FileNotFoundError:
-        print("✗ No CSV files found. Run benchmark first!")
+        print(f"✗ CSV files not found at {INPUT_DIR}/")
+        print("  Run the benchmark first to generate CSV files!")
         return None, None, None
 
 def plot_scaling_performance(scaling_df):
@@ -94,8 +107,9 @@ def plot_scaling_performance(scaling_df):
     ax.set_yscale('log')
     
     plt.tight_layout()
-    plt.savefig('plot_scaling_performance.png', dpi=300, bbox_inches='tight')
-    print("✓ Saved: plot_scaling_performance.png")
+    out_path = f'{OUTPUT_DIR}/plot_scaling_performance.png'
+    plt.savefig(out_path, dpi=300, bbox_inches='tight')
+    print(f"✓ Saved: {out_path}")
     plt.close()
 
 def plot_speedup_vs_scale(scaling_df):
@@ -128,9 +142,10 @@ def plot_speedup_vs_scale(scaling_df):
     for bars in [bars1, bars2, bars3]:
         for bar in bars:
             height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
-                   f'{height:.1f}x',
-                   ha='center', va='bottom', fontweight='bold', fontsize=9)
+            if height > 0: # Avoid labeling zero/neg bars
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       f'{height:.1f}x',
+                       ha='center', va='bottom', fontweight='bold', fontsize=9)
     
     ax.set_xlabel('Dataset Size', fontsize=13, fontweight='bold')
     ax.set_ylabel('Speedup Factor (vs Exact COUNT)', fontsize=13, fontweight='bold')
@@ -142,8 +157,9 @@ def plot_speedup_vs_scale(scaling_df):
     ax.axhline(y=1, color='red', linestyle='--', linewidth=1, alpha=0.5, label='No speedup')
     
     plt.tight_layout()
-    plt.savefig('plot_speedup_scaling.png', dpi=300, bbox_inches='tight')
-    print("✓ Saved: plot_speedup_scaling.png")
+    out_path = f'{OUTPUT_DIR}/plot_speedup_scaling.png'
+    plt.savefig(out_path, dpi=300, bbox_inches='tight')
+    print(f"✓ Saved: {out_path}")
     plt.close()
 
 def plot_error_vs_scale(scaling_df):
@@ -183,8 +199,9 @@ def plot_error_vs_scale(scaling_df):
                label='1% error threshold')
     
     plt.tight_layout()
-    plt.savefig('plot_error_scaling.png', dpi=300, bbox_inches='tight')
-    print("✓ Saved: plot_error_scaling.png")
+    out_path = f'{OUTPUT_DIR}/plot_error_scaling.png'
+    plt.savefig(out_path, dpi=300, bbox_inches='tight')
+    print(f"✓ Saved: {out_path}")
     plt.close()
 
 def plot_storage_vs_scale(scaling_df):
@@ -224,8 +241,9 @@ def plot_storage_vs_scale(scaling_df):
     ax.grid(axis='y', alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig('plot_storage_scaling.png', dpi=300, bbox_inches='tight')
-    print("✓ Saved: plot_storage_scaling.png")
+    out_path = f'{OUTPUT_DIR}/plot_storage_scaling.png'
+    plt.savefig(out_path, dpi=300, bbox_inches='tight')
+    print(f"✓ Saved: {out_path}")
     plt.close()
 
 def plot_precision_comparison(hll_df):
@@ -273,8 +291,9 @@ def plot_precision_comparison(hll_df):
     ax2.grid(axis='y', alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig('plot_precision_comparison.png', dpi=300, bbox_inches='tight')
-    print("✓ Saved: plot_precision_comparison.png")
+    out_path = f'{OUTPUT_DIR}/plot_precision_comparison.png'
+    plt.savefig(out_path, dpi=300, bbox_inches='tight')
+    print(f"✓ Saved: {out_path}")
     plt.close()
 
 def create_summary_table(scaling_df):
@@ -305,8 +324,12 @@ def create_summary_table(scaling_df):
 def main():
     """Main function"""
     print("="*50)
-    print("HLL BENCHMARK PLOTTING")
+    print(f"HLL BENCHMARK PLOTTING ({EXPERIMENT_PREFIX})")
     print("="*50)
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    print(f"✓ Output directory set to: {OUTPUT_DIR}")
     
     exact_df, hll_df, scaling_df = load_data()
     
@@ -323,18 +346,18 @@ def main():
     plot_storage_vs_scale(scaling_df)
     
     # Detailed analysis
-    plot_precision_comparison(hll_df)
+    # plot_precision_comparison(hll_df)
     
     # Summary
     create_summary_table(scaling_df)
     
     print("\n✓ All plots generated successfully!")
-    print("\nGenerated files:")
-    print("  - plot_scaling_performance.png")
-    print("  - plot_speedup_scaling.png")
-    print("  - plot_error_scaling.png")
-    print("  - plot_storage_scaling.png")
-    print("  - plot_precision_comparison.png")
+    print(f"  Files saved in: {OUTPUT_DIR}")
+    print("  > plot_scaling_performance.png")
+    print("  > plot_speedup_scaling.png")
+    print("  > plot_error_scaling.png")
+    print("  > plot_storage_scaling.png")
+    # print("  > plot_precision_comparison.png")
 
 if __name__ == "__main__":
     main()

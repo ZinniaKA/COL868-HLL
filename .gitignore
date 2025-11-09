@@ -1,5 +1,6 @@
-/results
 /tables
+/tables_backup
 /plots
+/plots_backup
 *.csv
 *.png

@@ -1,14 +1,21 @@
 -- ============================================================
+-- :: BENCHMARK PARAMETERS
+-- ============================================================
+
+-- SQL array literal for HLL precisions to test
+\set PRECISIONS_ARRAY '{10, 12, 14}'
+
+-- Cardinality percentage (e.g., 0.10 = 10% distinct values)
+\set CARDINALITY_PCT '0.10'
+
+-- ============================================================
 -- COMPREHENSIVE HLL Benchmark - Multi-Scale Analysis
--- Tests: 10K, 100K, 1M, 10M rows
--- Runtime: 10-30 mins total
 -- ============================================================
 
 -- Clean start
 DROP TABLE IF EXISTS benchmark_data CASCADE;
 DROP TABLE IF EXISTS results_exact CASCADE;
 DROP TABLE IF EXISTS results_hll CASCADE;
--- DROP TABLE IF EXISTS scaling_results CASCADE;
 
 \timing on
 
@@ -38,29 +45,14 @@ CREATE TABLE results_hll (
     run_number INTEGER
 );
 
--- CREATE TABLE scaling_results (
---     dataset_size BIGINT,
---     distinct_count BIGINT,
---     exact_avg_ms NUMERIC,
---     exact_std_ms NUMERIC,
---     hll_p10_avg_ms NUMERIC,
---     hll_p12_avg_ms NUMERIC,
---     hll_p14_avg_ms NUMERIC,
---     hll_p10_error NUMERIC,
---     hll_p12_error NUMERIC,
---     hll_p14_error NUMERIC,
---     hll_p10_storage INTEGER,
---     hll_p12_storage INTEGER,
---     hll_p14_storage INTEGER
--- );
-
 -- ============================================================
 -- BENCHMARK FUNCTION
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION run_benchmark(
     data_size BIGINT,
-    cardinality_pct NUMERIC DEFAULT 0.10
+    cardinality_pct NUMERIC,
+    precisions INTEGER[]
 ) RETURNS void AS $$
 DECLARE
     start_time TIMESTAMP;
@@ -75,7 +67,7 @@ DECLARE
     storage_size INTEGER;
     msg TEXT;
 BEGIN
-    -- Calculate distinct values (10% cardinality by default)
+    -- Calculate distinct values
     distinct_vals := FLOOR(data_size * cardinality_pct)::INTEGER;
     
     msg := '============================================================';
@@ -145,10 +137,11 @@ BEGIN
     -- ========================================
     -- HLL BENCHMARK
     -- ========================================
-    msg := '>>> Running HLL tests (precisions 10, 12, 14)...';
+    msg := '>>> Running HLL tests (precisions ' || precisions::TEXT || ')...';
     RAISE NOTICE '%', msg;
     
-    FOREACH prec IN ARRAY ARRAY[10, 12, 14] LOOP
+    -- Iterate over the precisions array passed as an argument
+    FOREACH prec IN ARRAY precisions LOOP
         msg := '  Testing precision ' || prec;
         RAISE NOTICE '%', msg;
         
@@ -159,14 +152,17 @@ BEGIN
         FOR i IN 1..5 LOOP
             start_time := clock_timestamp();
             
+            -- Adds the hashed user_ids into an HLL and estimates cardinality
+            -- creates new HLL for each run
             SELECT hll_add_agg(hll_hash_integer(user_id), prec) 
             INTO hll_result
             FROM benchmark_data;
+
+            hll_estimate := hll_cardinality(hll_result);
             
             end_time := clock_timestamp();
             duration_ms := EXTRACT(EPOCH FROM (end_time - start_time)) * 1000;
             
-            hll_estimate := hll_cardinality(hll_result);
             storage_size := pg_column_size(hll_result);
             
             INSERT INTO results_hll VALUES (
@@ -205,88 +201,30 @@ $$ LANGUAGE plpgsql;
 \echo ''
 \echo '========================================'
 \echo 'MULTI-SCALE BENCHMARK SUITE'
-\echo 'This will take 2-3 hours to complete'
+\echo 'Using precisions: ' :PRECISIONS_ARRAY
 \echo '========================================'
 \echo ''
 
--- Scale 1: 10K rows
-SELECT run_benchmark(10000);
+\echo '--- Starting benchmark for 10000 rows ---'
+SELECT run_benchmark(10000, :CARDINALITY_PCT, :'PRECISIONS_ARRAY');
+\echo '--- Completed benchmark for 10000 rows ---'
+\echo ''
 
--- Scale 2: 100K rows
-SELECT run_benchmark(100000);
+\echo '--- Starting benchmark for 100000 rows ---'
+SELECT run_benchmark(100000, :CARDINALITY_PCT, :'PRECISIONS_ARRAY');
+\echo '--- Completed benchmark for 100000 rows ---'
+\echo ''
 
--- Scale 3: 1M rows
-SELECT run_benchmark(1000000);
+\echo '--- Starting benchmark for 1000000 rows ---'
+SELECT run_benchmark(1000000, :CARDINALITY_PCT, :'PRECISIONS_ARRAY');
+\echo '--- Completed benchmark for 1000000 rows ---'
+\echo ''
 
--- Scale 4: 10M rows
-SELECT run_benchmark(10000000);
+\echo '--- Starting benchmark for 10000000 rows ---'
+SELECT run_benchmark(10000000, :CARDINALITY_PCT, :'PRECISIONS_ARRAY');
+\echo '--- Completed benchmark for 10000000 rows ---'
+\echo ''
 
--- ============================================================
--- COMPUTE SCALING SUMMARY
--- ============================================================
-
--- \echo ''
--- \echo '>>> Computing scaling summary...'
-
--- INSERT INTO scaling_results
--- SELECT 
---     dataset_size,
---     AVG(exact.distinct_count)::BIGINT as distinct_count,
---     AVG(exact.duration_ms) as exact_avg_ms,
---     STDDEV(exact.duration_ms) as exact_std_ms,
---     AVG(CASE WHEN hll.precision = 10 THEN hll.duration_ms END) as hll_p10_avg_ms,
---     AVG(CASE WHEN hll.precision = 12 THEN hll.duration_ms END) as hll_p12_avg_ms,
---     AVG(CASE WHEN hll.precision = 14 THEN hll.duration_ms END) as hll_p14_avg_ms,
---     AVG(CASE WHEN hll.precision = 10 THEN hll.relative_error END) as hll_p10_error,
---     AVG(CASE WHEN hll.precision = 12 THEN hll.relative_error END) as hll_p12_error,
---     AVG(CASE WHEN hll.precision = 14 THEN hll.relative_error END) as hll_p14_error,
---     AVG(CASE WHEN hll.precision = 10 THEN hll.storage_bytes END)::INTEGER as hll_p10_storage,
---     AVG(CASE WHEN hll.precision = 12 THEN hll.storage_bytes END)::INTEGER as hll_p12_storage,
---     AVG(CASE WHEN hll.precision = 14 THEN hll.storage_bytes END)::INTEGER as hll_p14_storage
--- FROM results_exact exact
--- LEFT JOIN results_hll hll ON exact.dataset_size = hll.dataset_size
--- GROUP BY dataset_size
--- ORDER BY dataset_size;
-
--- ============================================================
--- FINAL RESULTS
--- ============================================================
-
--- \echo ''
--- \echo '========================================'
--- \echo 'SCALING ANALYSIS RESULTS'
--- \echo '========================================'
-
--- \echo ''
--- \echo '>>> Performance Scaling'
--- SELECT 
---     dataset_size as rows,
---     distinct_count as distinct,
---     ROUND(exact_avg_ms, 2) as exact_ms,
---     ROUND(hll_p12_avg_ms, 2) as hll_ms,
---     ROUND(exact_avg_ms / hll_p12_avg_ms, 2) as speedup
--- FROM scaling_results
--- ORDER BY dataset_size;
-
--- \echo ''
--- \echo '>>> Accuracy by Scale (Precision 12)'
--- SELECT 
---     dataset_size as rows,
---     ROUND(hll_p10_error, 3) as p10_err_pct,
---     ROUND(hll_p12_error, 3) as p12_err_pct,
---     ROUND(hll_p14_error, 3) as p14_err_pct
--- FROM scaling_results
--- ORDER BY dataset_size;
-
--- \echo ''
--- \echo '>>> Storage Requirements'
--- SELECT 
---     dataset_size as rows,
---     hll_p10_storage as p10_bytes,
---     hll_p12_storage as p12_bytes,
---     hll_p14_storage as p14_bytes
--- FROM scaling_results
--- ORDER BY dataset_size;
 
 -- ============================================================
 -- EXPORT RESULTS
@@ -294,9 +232,9 @@ SELECT run_benchmark(10000000);
 
 \echo ''
 \echo '>>> Exporting to CSV...'
-\copy results_exact TO '/code/results/hll_add_agg_exact.csv' CSV HEADER
-\copy results_hll TO '/code/results/hll_add_agg_hll.csv' CSV HEADER
--- \copy scaling_results TO '/code/results/hll_add_agg_scaling_results.csv' CSV HEADER
+\! mkdir -p '/code/tables'
+\copy results_exact TO '/code/tables/hll_add_agg_exact.csv' CSV HEADER
+\copy results_hll TO '/code/tables/hll_add_agg_hll.csv' CSV HEADER
 
 \echo ''
 \echo '========================================'
