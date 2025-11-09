@@ -1,6 +1,6 @@
 # HyperLogLog (HLL) Benchmarking in PostgreSQL
 
-This experiment aims to evaluate **HyperLogLog (HLL)** probabilistic data structure for approximate distinct counting in PostgreSQL. We benchmark **HLL against exact COUNT(DISTINCT)** operations across multiple scales (10K to 10M rows) and precision parameters (10, 12, 14), analyzing accuracy, performance, and memory usage.
+This experiment aims to evaluate **HyperLogLog (HLL)** probabilistic data structure for approximate distinct counting in PostgreSQL. We benchmark **HLL** against exact **COUNT(DISTINCT)** operations across multiple scales (database sizes) and precision , analyzing accuracy, performance, and memory usage.
 
 ## Setup Commands
 
@@ -14,35 +14,23 @@ cd COL868-HLL
 
 # 2. Start PostgreSQL with HLL extension
 docker-compose up -d
+
+# 3. Verify HLL extension is installed
+docker exec -it pgdb psql -U myuser -d mydb -c "\dx hll"
 ```
 
-## Running Experiments
+## Experiments
 
-### Experiment 1: hll_add_agg() - Aggregate Cardinality Estimation
+### Experiment 1:
 
-Purpose: Compare **HLL approximate counting** and **exact COUNT(DISTINCT)**
+Purpose: Test **HLL approximate counting** using **hll_add_agg** and **hll_cardinality** and  compare it against baseline **exact COUNT(DISTINCT)**
 
 HLL precision: 10, 12, 14
-
-##### Quick Test
-
-Dataset: 100K rows
-Cardinality: ~10K distinct values
-
-```bash
-# Run benchmark
-docker exec -it pgdb psql -f quick_hll_add_agg.sql
-
-# Make graphs
-docker compose -f docker-compose.graphs.yml run --rm plotter python quick_plot.py
-```
-
-#### Multi-Scale Benchmark
-
-Runtime: 10-30 mins
+Expected runtime: 10-30 mins
 Datasets: 10K, 100K, 1M, 10M rows
 Cardinality: 10% of dataset size
-
+Data Type: Integer only
+Distribution: Uniform random (not representative of real-world skew)
 
 ```bash
 # Run multi-scale benchmark
@@ -52,11 +40,36 @@ docker exec -it pgdb psql -f benchmark_hll_add_agg.sql
 docker compose -f docker-compose.graphs.yml run --rm plotter python plot_results_add_arg.py
 ```
 
-#### Data Characteristics
+### Experiment 2:
 
-- **Distribution:** Uniform random (not representative of real-world skew)
-- **Data Type:** Integer only (text hashing not tested)
-- **Cardinality:** Fixed at 10%
+Purpose: Evaluate real-world analytics pattern - pre-compute daily sketches, union for any time range
+
+Union performance across time windows (7-90 days)
+Speedup vs exact re-aggregation
+Nested unions (daily → weekly → monthly)
+Storage efficiency
+Scalability with number of sketches
+
+Dataset: 1.28M events over 90 days, 50K unique usersCardinality: 10% of dataset size
+Distribution: Power-law (realistic user activity)
+
+10% super-active users
+30% active users
+60% casual users
+
+
+Data Type: Integer user IDs
+Cardinality: 50K unique users, variable daily activity
+Pattern: Simulates real-world analytics workload
+
+
+```bash
+# Run multi-scale benchmark
+docker exec -it pgdb psql -f union_agg.sql
+
+# Make graphs
+docker compose -f docker-compose.graphs.yml run --rm plotter python union_plot.py
+```
 
 
 ## Cleanup Commands
@@ -64,8 +77,6 @@ docker compose -f docker-compose.graphs.yml run --rm plotter python plot_results
 ```bash
 docker-compose down
 ```
-
-Full system details available in **MANIFEST.md**
 
 ## Verification Commands
 - Verify HLL extension is installed
@@ -95,3 +106,4 @@ UPDATE test_hll SET items = hll_add(items, hll_hash_text('hello')) WHERE id = 1;
 SELECT #items FROM test_hll WHERE id = 1;
 ```
 
+Full system details available in **MANIFEST.md**
