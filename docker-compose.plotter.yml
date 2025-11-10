@@ -2,8 +2,10 @@ services:
   plotter:
     build:
       context: .
-      dockerfile: Dockerfile.graphs
+      dockerfile: Dockerfile.plotter
     image: plotter:latest
     working_dir: /code
     volumes:
       - .:/code
+    container_name: plotter
+    tty: true

@@ -237,4 +237,4 @@ END $$;
 \echo '  /code/tables/experiment_2/union.csv'
 \echo ''
 \echo 'Run the following to generate plots:' 
-\echo 'docker compose -f docker-compose.graphs.yml run --rm plotter python plot_experiment_2.py'
+\echo 'docker compose -f docker-compose.plotter.yml run --rm plotter python plot_experiment_2.py'

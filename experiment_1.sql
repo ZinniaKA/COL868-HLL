@@ -230,9 +230,9 @@ SELECT run_benchmark(10000000, :CARDINALITY_PCT, ARRAY[10, 12, 14]);
 \echo ''
 
 
--- ============================================================
--- EXPORT TABLES
--- ============================================================
+============================================================
+EXPORT TABLES
+============================================================
 
 \echo ''
 \echo '>>> Exporting tables...'
@@ -250,4 +250,4 @@ SELECT run_benchmark(10000000, :CARDINALITY_PCT, ARRAY[10, 12, 14]);
 \echo '  /code/tables/experiment_1/hll.csv'
 \echo ''
 \echo 'Run the following to generate plots:' 
-\echo 'docker compose -f docker-compose.graphs.yml run --rm plotter python plot_experiment_1.py'
+\echo 'docker compose -f docker-compose.plotter.yml run --rm plotter python plot_experiment_1.py'

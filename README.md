@@ -4,49 +4,43 @@ This experiment aims to evaluate **HyperLogLog (HLL)** probabilistic data struct
 
 ## Setup Commands
 
-Prerequisites - Docker Desktop (with Docker Compose)
+Prerequisites:
+- Docker Desktop (with Docker Compose)
+- Git, cloning the repo into a linux environment preferably
+  - On Windows, had some weird issues with line endings affecting created dirs and paths.
 
-- **Clone and Run Compose:**
+### Clone and Running Experiments
 
 ```bash
 # 1. Clone repository
 git clone https://github.com/Brian-1402/COL868-HLL.git
 cd COL868-HLL
 
-# 2. Start PostgreSQL with HLL extension
-docker-compose up -d
+# Run experiments and create plots. Runs docker. Use sudo if docker needs it, Otherwise not needed.
+sudo bash run.sh
 
-#c3. Verify hll extension is installed (optional)
-docker exec -it pgdb psql -U myuser -d mydb -c "\dx hll"
+# Cleanup. Sudo most likely needed since files created by docker may need elevated permissions to delete.
+# WILL DELETE PLOTS AND TABLES DIRECTORIES
+sudo bash clean.sh
 ```
 
-### Basic HLL Test Commands (Run in psql)
+#### To run manually step-by-step:
+```bash
+# Set up and start the Docker containers
+docker-compose \
+  -f docker-compose.yml \
+  -f docker-compose.plotter.yml \
+  up -d
 
-```sql
+# Wait for the PostgreSQL container to be ready
+sleep 10
 
--- Enter psql
-docker exec -it pgdb psql -U myuser -d mydb
+docker exec pgdb psql -f experiment_1.sql
+docker exec plotter python plot_experiment_1.py
 
--- 1. Create a table
-CREATE TABLE test_hll (id integer, items hll);
-
--- 2. Insert an empty hll set
-INSERT INTO test_hll(id, items) VALUES (1, hll_empty());
-
--- 3. Add two distinct items
-UPDATE test_hll SET items = hll_add(items, hll_hash_integer(12345)) WHERE id = 1;
-UPDATE test_hll SET items = hll_add(items, hll_hash_text('hello')) WHERE id = 1;
-
--- 4. Check cardinality (Expected: 2)
-SELECT hll_cardinality(items) FROM test_hll WHERE id = 1;
-
--- 5. Add a duplicate item
-UPDATE test_hll SET items = hll_add(items, hll_hash_text('hello')) WHERE id = 1;
-
--- 6. Check cardinality again using the operator (Expected: 2)
-SELECT #items FROM test_hll WHERE id = 1;
+docker exec pgdb psql -f experiment_2.sql
+docker exec plotter python plot_experiment_2.py
 ```
-
 
 ## Experiments
 
@@ -66,7 +60,7 @@ Test **HLL approximate counting** using **hll_add_agg** and **hll_cardinality** 
 docker exec -it pgdb psql -f experiment_1.sql
 
 # Make plots
-docker compose -f docker-compose.graphs.yml run --rm plotter python plot_experiment_1.py
+docker compose -f docker-compose.plotter.yml run --rm plotter python plot_experiment_1.py
 ```
 
 **Plots generated:**
@@ -108,7 +102,7 @@ Test **hll_union_agg** performance by evaluating real-world analytics pattern wh
 docker exec -it pgdb psql -f experiment_2.sql
 
 # Make plots
-docker compose -f docker-compose.graphs.yml run --rm plotter python plot_experiment_2.py
+docker compose -f docker-compose.plotter.yml run --rm plotter python plot_experiment_2.py
 ```
 
 
@@ -116,7 +110,44 @@ docker compose -f docker-compose.graphs.yml run --rm plotter python plot_experim
 
 - **Stop and Remove Container:**
 ```bash
-docker-compose down
+# Stop and remove the Docker containers and images
+docker-compose \
+  -f docker-compose.yml \
+  -f docker-compose.plotter.yml \
+  down \
+  --rmi all
+
+rm -rf plots/ tables/
 ```
 
 *System details available in **MANIFEST.md***
+
+
+## Basic HLL Test Commands (Run in psql)
+
+```bash
+docker compose up -d
+
+-- Enter psql
+docker exec -it pgdb psql
+```
+```sql
+-- 1. Create a table
+CREATE TABLE test_hll (id integer, items hll);
+
+-- 2. Insert an empty hll set
+INSERT INTO test_hll(id, items) VALUES (1, hll_empty());
+
+-- 3. Add two distinct items
+UPDATE test_hll SET items = hll_add(items, hll_hash_integer(12345)) WHERE id = 1;
+UPDATE test_hll SET items = hll_add(items, hll_hash_text('hello')) WHERE id = 1;
+
+-- 4. Check cardinality (Expected: 2)
+SELECT hll_cardinality(items) FROM test_hll WHERE id = 1;
+
+-- 5. Add a duplicate item
+UPDATE test_hll SET items = hll_add(items, hll_hash_text('hello')) WHERE id = 1;
+
+-- 6. Check cardinality again using the operator (Expected: 2)
+SELECT #items FROM test_hll WHERE id = 1;
+```

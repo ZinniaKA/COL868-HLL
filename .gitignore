@@ -4,3 +4,5 @@
 /plots_backup
 *.csv
 *.png
+
+/scripts
