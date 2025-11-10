@@ -1,12 +1,13 @@
 # HyperLogLog (HLL) Benchmarking in PostgreSQL
 
-This experiment aims to evaluate **HyperLogLog (HLL)** probabilistic data structure for approximate distinct counting in PostgreSQL. We benchmark **HLL** against exact **COUNT(DISTINCT)** operations across multiple scales (database sizes) and precision , analyzing accuracy, performance, and memory usage.
+This experiment aims to evaluate **HyperLogLog (HLL)** probabilistic data structure for approximate distinct counting in PostgreSQL. We benchmark **HLL** against exact **COUNT(DISTINCT)** operations across multiple scales (database sizes) and precision; analyzing accuracy, performance, and memory usage.
 
 ## Setup Commands
 
 Prerequisites - Docker Desktop (with Docker Compose)
 
 - **Clone and Run Compose:**
+
 ```bash
 # 1. Clone repository
 git clone https://github.com/Brian-1402/COL868-HLL.git
@@ -15,34 +16,61 @@ cd COL868-HLL
 # 2. Start PostgreSQL with HLL extension
 docker-compose up -d
 
-# 3. Verify HLL extension is installed
+#c3. Verify hll extension is installed (optional)
 docker exec -it pgdb psql -U myuser -d mydb -c "\dx hll"
 ```
+
+### Basic HLL Test Commands (Run in psql)
+
+```sql
+
+-- Enter psql
+docker exec -it pgdb psql -U myuser -d mydb
+
+-- 1. Create a table
+CREATE TABLE test_hll (id integer, items hll);
+
+-- 2. Insert an empty hll set
+INSERT INTO test_hll(id, items) VALUES (1, hll_empty());
+
+-- 3. Add two distinct items
+UPDATE test_hll SET items = hll_add(items, hll_hash_integer(12345)) WHERE id = 1;
+UPDATE test_hll SET items = hll_add(items, hll_hash_text('hello')) WHERE id = 1;
+
+-- 4. Check cardinality (Expected: 2)
+SELECT hll_cardinality(items) FROM test_hll WHERE id = 1;
+
+-- 5. Add a duplicate item
+UPDATE test_hll SET items = hll_add(items, hll_hash_text('hello')) WHERE id = 1;
+
+-- 6. Check cardinality again using the operator (Expected: 2)
+SELECT #items FROM test_hll WHERE id = 1;
+```
+
 
 ## Experiments
 
 ### Experiment 1:
 
-Purpose: Test **HLL approximate counting** using **hll_add_agg** and **hll_cardinality** and  compare it against baseline **exact COUNT(DISTINCT)**
+Test **HLL approximate counting** using **hll_add_agg** and **hll_cardinality** and  compare it against baseline **exact COUNT(DISTINCT)**
 
 HLL precision: 10, 12, 14
-Expected runtime: 10-30 mins
 Datasets: 10K, 100K, 1M, 10M rows
 Cardinality: 10% of dataset size
 Data Type: Integer only
 Distribution: Uniform random (not representative of real-world skew)
 
 ```bash
-# Run multi-scale benchmark
-docker exec -it pgdb psql -f benchmark_hll_add_agg.sql
+# Run experiment
+docker exec -it pgdb psql -f experiment_1.sql
 
-# Make graphs
-docker compose -f docker-compose.graphs.yml run --rm plotter python plot_results_add_agg.py
+# Make plots
+docker compose -f docker-compose.graphs.yml run --rm plotter python plot_experiment_1.py
 ```
 
 ### Experiment 2:
 
-Purpose: Evaluate real-world analytics pattern - pre-compute daily sketches, union for any time range
+Test **hll_union_agg** by evaluateing it against real-world analytics pattern - pre-compute daily sketches, union for any time range
 
 Union performance across time windows (7-90 days)
 Speedup vs exact re-aggregation
@@ -64,46 +92,19 @@ Pattern: Simulates real-world analytics workload
 
 
 ```bash
-# Run multi-scale benchmark
-docker exec -it pgdb psql -f union_agg.sql
+# Run experiment
+docker exec -it pgdb psql -f experiment_2.sql
 
-# Make graphs
-docker compose -f docker-compose.graphs.yml run --rm plotter python union_plot.py
+# Make plots
+docker compose -f docker-compose.graphs.yml run --rm plotter python plot_experiment_2.py
 ```
 
 
 ## Cleanup Commands
+
 - **Stop and Remove Container:**
 ```bash
 docker-compose down
 ```
 
-## Verification Commands
-- Verify HLL extension is installed
-```bash
-docker exec -it pgdb psql -U myuser -d mydb -c "\dx hll"
-```
-
-### Basic HLL Test Commands (Run in psql)
-```sql
--- 1. Create a table
-CREATE TABLE test_hll (id integer, items hll);
-
--- 2. Insert an empty hll set
-INSERT INTO test_hll(id, items) VALUES (1, hll_empty());
-
--- 3. Add two distinct items
-UPDATE test_hll SET items = hll_add(items, hll_hash_integer(12345)) WHERE id = 1;
-UPDATE test_hll SET items = hll_add(items, hll_hash_text('hello')) WHERE id = 1;
-
--- 4. Check cardinality (Expected: 2)
-SELECT hll_cardinality(items) FROM test_hll WHERE id = 1;
-
--- 5. Add a duplicate item
-UPDATE test_hll SET items = hll_add(items, hll_hash_text('hello')) WHERE id = 1;
-
--- 6. Check cardinality again using the operator (Expected: 2)
-SELECT #items FROM test_hll WHERE id = 1;
-```
-
-Full system details available in **MANIFEST.md**
+*System details available in **MANIFEST.md***

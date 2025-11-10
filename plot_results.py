@@ -1,26 +1,22 @@
 #!/usr/bin/env python3
 """
-HLL Benchmark Plotting Script
-Generates plots for multi-scale analysis (10K, 100K, 1M, 10M rows)
+Estimte Cardinality Plotting Script
 """
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-import os  # Added for directory creation
+import os
 
 # Set style
 sns.set_style("whitegrid")
 plt.rcParams['font.size'] = 11
 plt.rcParams['figure.dpi'] = 300
 
-# --- Configuration ---
-# This prefix must match the one used in the benchmark script
-EXPERIMENT_PREFIX = 'hll_add_agg'
-INPUT_DIR = './tables'
-OUTPUT_DIR = f'./plots/{EXPERIMENT_PREFIX}'
-# --- End Configuration ---
+# Configuration
+INPUT_DIR = './tables/experiment_1'
+OUTPUT_DIR = f'./plots/experiment_1'
 
 
 def compute_scaling_summary(exact_df, hll_df):
@@ -50,8 +46,8 @@ def compute_scaling_summary(exact_df, hll_df):
 
 def load_data():
     """Load benchmark results from CSV files using configured paths"""
-    exact_csv = f'{INPUT_DIR}/{EXPERIMENT_PREFIX}_exact.csv'
-    hll_csv = f'{INPUT_DIR}/{EXPERIMENT_PREFIX}_hll.csv'
+    exact_csv = f'{INPUT_DIR}/exact.csv'
+    hll_csv = f'{INPUT_DIR}/hll.csv'
     
     try:
         exact_df = pd.read_csv(exact_csv)
@@ -60,7 +56,7 @@ def load_data():
         
         # Compute scaling summary from raw data
         scaling_df = compute_scaling_summary(exact_df, hll_df)
-        print("✓ Computed scaling summary")
+        # print("✓ Computed scaling summary")
         
         return exact_df, hll_df, scaling_df
     except FileNotFoundError:
@@ -68,10 +64,10 @@ def load_data():
         print("  Run the benchmark first to generate CSV files!")
         return None, None, None
 
-def plot_scaling_performance(scaling_df):
-    """Plot 1: Performance scaling across dataset sizes"""
+def plot_latency_scaling(scaling_df):
+    """Plot 1: Latency across dataset sizes"""
     if scaling_df is None:
-        print("⊘ Skipping scaling plot (no multi-scale data)")
+        print("Skipping scaling plot (no multi-scale data)")
         return
     
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -107,13 +103,13 @@ def plot_scaling_performance(scaling_df):
     ax.set_yscale('log')
     
     plt.tight_layout()
-    out_path = f'{OUTPUT_DIR}/plot_scaling_performance.png'
+    out_path = f'{OUTPUT_DIR}/plot_latency_scaling.png'
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
     print(f"✓ Saved: {out_path}")
     plt.close()
 
 def plot_speedup_vs_scale(scaling_df):
-    """Plot 2: Speedup factor across scales"""
+    """Plot 2: Speedup across dataset sizes"""
     if scaling_df is None:
         print("⊘ Skipping speedup plot (no multi-scale data)")
         return
@@ -163,7 +159,7 @@ def plot_speedup_vs_scale(scaling_df):
     plt.close()
 
 def plot_error_vs_scale(scaling_df):
-    """Plot 3: Error rates across scales"""
+    """Plot 3: Error rates across dataset sizes"""
     if scaling_df is None:
         print("⊘ Skipping error plot (no multi-scale data)")
         return
@@ -205,7 +201,7 @@ def plot_error_vs_scale(scaling_df):
     plt.close()
 
 def plot_storage_vs_scale(scaling_df):
-    """Plot 4: Storage requirements"""
+    """Plot 4: Storage requirements vs dataset size"""
     if scaling_df is None:
         print("⊘ Skipping storage plot (no multi-scale data)")
         return
@@ -246,85 +242,92 @@ def plot_storage_vs_scale(scaling_df):
     print(f"✓ Saved: {out_path}")
     plt.close()
 
-def plot_precision_comparison(hll_df):
-    """Plot 5: Detailed precision comparison at largest scale"""
-    # Use largest dataset
-    max_size = hll_df['dataset_size'].max()
-    subset = hll_df[hll_df['dataset_size'] == max_size]
+def plot_accuracy_vs_storage(hll_df):
+    """Plot 5: Accuracy vs Storage trade-off"""
+    if hll_df is None:
+        print("⊘ Skipping accuracy vs storage plot (no data)")
+        return
     
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+    fig, ax1 = plt.subplots(figsize=(10, 6))
     
-    # Left: Error distribution
-    precisions = sorted(subset['precision'].unique())
-    errors_by_prec = [subset[subset['precision'] == p]['relative_error'].values 
-                      for p in precisions]
+    # Calculate means across all dataset sizes
+    summary = hll_df.groupby('precision').agg({
+        'relative_error': 'mean',
+        'storage_bytes': 'mean'
+    }).reset_index()
     
-    bp = ax1.boxplot(errors_by_prec, labels=[f'p={p}' for p in precisions],
-                     patch_artist=True, showmeans=True)
+    # Error on left axis
+    color1 = '#e74c3c'
+    ax1.set_xlabel('HLL Precision Parameter', fontsize=13, fontweight='bold')
+    ax1.set_ylabel('Average Relative Error (%)', color=color1, fontsize=13, fontweight='bold')
+    line1 = ax1.plot(summary['precision'], summary['relative_error'], 
+                     marker='o', markersize=12, linewidth=3, 
+                     color=color1, label='Error')
+    ax1.tick_params(axis='y', labelcolor=color1)
+    ax1.set_xticks(summary['precision'])
+    ax1.grid(alpha=0.3)
     
-    colors = ['#3498db', '#2ecc71', '#f39c12']
-    for patch, color in zip(bp['boxes'], colors):
-        patch.set_facecolor(color)
-        patch.set_alpha(0.7)
+    # Storage on right axis
+    ax2 = ax1.twinx()
+    color2 = '#3498db'
+    ax2.set_ylabel('Average Storage Size (bytes)', color=color2, fontsize=13, fontweight='bold')
+    line2 = ax2.plot(summary['precision'], summary['storage_bytes'], 
+                     marker='s', markersize=12, linewidth=3, 
+                     color=color2, label='Storage', linestyle='--')
+    ax2.tick_params(axis='y', labelcolor=color2)
     
-    ax1.set_xlabel('HLL Precision', fontsize=12, fontweight='bold')
-    ax1.set_ylabel('Relative Error (%)', fontsize=12, fontweight='bold')
-    ax1.set_title(f'Error Distribution ({max_size:,} rows)', 
-                  fontsize=13, fontweight='bold')
-    ax1.grid(axis='y', alpha=0.3)
+    # Add value labels
+    for i, row in summary.iterrows():
+        # Error labels
+        ax1.text(row['precision'], row['relative_error'] + 0.1, 
+                f"{row['relative_error']:.2f}%", 
+                ha='center', va='bottom', fontsize=10, fontweight='bold', color=color1)
+        # Storage labels
+        ax2.text(row['precision'], row['storage_bytes'] + 500, 
+                f"{row['storage_bytes']:.0f}B", 
+                ha='center', va='bottom', fontsize=10, fontweight='bold', color=color2)
     
-    # Right: Latency distribution
-    latencies_by_prec = [subset[subset['precision'] == p]['duration_ms'].values 
-                         for p in precisions]
+    ax1.set_title('HLL: Accuracy vs Storage Trade-off', fontsize=15, fontweight='bold')
     
-    bp2 = ax2.boxplot(latencies_by_prec, labels=[f'p={p}' for p in precisions],
-                      patch_artist=True, showmeans=True)
-    
-    for patch, color in zip(bp2['boxes'], colors):
-        patch.set_facecolor(color)
-        patch.set_alpha(0.7)
-    
-    ax2.set_xlabel('HLL Precision', fontsize=12, fontweight='bold')
-    ax2.set_ylabel('Query Latency (ms)', fontsize=12, fontweight='bold')
-    ax2.set_title(f'Latency Distribution ({max_size:,} rows)', 
-                  fontsize=13, fontweight='bold')
-    ax2.grid(axis='y', alpha=0.3)
+    # Combined legend
+    lines = line1 + line2
+    labels = [l.get_label() for l in lines]
+    ax1.legend(lines, labels, loc='upper right', fontsize=11)
     
     plt.tight_layout()
-    out_path = f'{OUTPUT_DIR}/plot_precision_comparison.png'
+    out_path = f'{OUTPUT_DIR}/plot_accuracy_storage_tradeoff.png'
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
     print(f"✓ Saved: {out_path}")
     plt.close()
 
-def create_summary_table(scaling_df):
-    """Create summary table"""
-    if scaling_df is None:
-        print("⊘ No scaling data for summary table")
-        return
+# def create_summary_table(scaling_df):
+#     """Create summary table"""
+#     if scaling_df is None:
+#         print("⊘ No scaling data for summary table")
+#         return
     
-    print("\n" + "="*90)
-    print("BENCHMARK RESULTS")
-    print("="*90)
+#     # print("\n" + "="*90)
+#     # print("BENCHMARK RESULTS")
+#     print("="*90)
     
-    print(f"\n{'Dataset':<12} {'Distinct':<10} {'Exact (ms)':<15} {'HLL p=12 (ms)':<15} "
-          f"{'Speedup':<10} {'Error %':<10} {'Storage':<10}")
-    print("-"*90)
+#     print(f"\n{'Dataset':<12} {'Distinct':<10} {'Exact (ms)':<15} {'HLL p=12 (ms)':<15} "
+#           f"{'Speedup':<10} {'Error %':<10} {'Storage (KB)':<10}")
+#     print("-"*90)
     
-    for _, row in scaling_df.iterrows():
-        size_str = f"{row['dataset_size']//1000}K" if row['dataset_size'] < 1000000 else f"{row['dataset_size']//1000000}M"
-        speedup = row['exact_avg_ms'] / row['hll_p12_avg_ms']
-        storage_kb = row['hll_p12_storage'] / 1024
+#     for _, row in scaling_df.iterrows():
+#         size_str = f"{row['dataset_size']//1000}K" if row['dataset_size'] < 1000000 else f"{row['dataset_size']//1000000}M"
+#         speedup = row['exact_avg_ms'] / row['hll_p12_avg_ms']
+#         storage_kb = row['hll_p12_storage'] / 1024
         
-        print(f"{size_str:<12} {row['distinct_count']:<10.0f} "
-              f"{row['exact_avg_ms']:<15.2f} {row['hll_p12_avg_ms']:<15.2f} "
-              f"{speedup:<10.2f}x {row['hll_p12_error']:<10.3f} {storage_kb:<10.2f} KB")
+#         print(f"{size_str:<12} {row['distinct_count']:<10.0f} "
+#               f"{row['exact_avg_ms']:<15.2f} {row['hll_p12_avg_ms']:<15.2f} "
+#               f"{speedup:<10.2f} {row['hll_p12_error']:<10.3f} {storage_kb:<10.2f}")
     
-    print("="*90 + "\n")
+#     print("="*90 + "\n")
 
 def main():
-    """Main function"""
     print("="*50)
-    print(f"HLL BENCHMARK PLOTTING ({EXPERIMENT_PREFIX})")
+    print(f"HLL BENCHMARK PLOTTING - ESTIMATE CARDINALITY")
     print("="*50)
     
     # Create output directory if it doesn't exist
@@ -339,25 +342,21 @@ def main():
     
     print("\nGenerating plots...")
     
-    # Multi-scale plots
-    plot_scaling_performance(scaling_df)
+    plot_latency_scaling(scaling_df)
     plot_speedup_vs_scale(scaling_df)
     plot_error_vs_scale(scaling_df)
     plot_storage_vs_scale(scaling_df)
-    
-    # Detailed analysis
-    # plot_precision_comparison(hll_df)
-    
+    plot_accuracy_vs_storage(hll_df)
+   
     # Summary
-    create_summary_table(scaling_df)
+    # create_summary_table(scaling_df)
     
     print("\n✓ All plots generated successfully!")
     print(f"  Files saved in: {OUTPUT_DIR}")
-    print("  > plot_scaling_performance.png")
-    print("  > plot_speedup_scaling.png")
-    print("  > plot_error_scaling.png")
-    print("  > plot_storage_scaling.png")
-    # print("  > plot_precision_comparison.png")
+    # print("  > plot_latency_scaling.png")
+    # print("  > plot_speedup_scaling.png")
+    # print("  > plot_error_scaling.png")
+    # print("  > plot_storage_scaling.png")
 
 if __name__ == "__main__":
     main()

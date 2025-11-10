@@ -1,5 +1,5 @@
 -- ============================================================
--- :: BENCHMARK PARAMETERS
+-- BENCHMARK PARAMETERS
 -- ============================================================
 
 -- SQL array literal for HLL precisions to test
@@ -8,16 +8,15 @@
 -- Cardinality percentage (e.g., 0.10 = 10% distinct values)
 \set CARDINALITY_PCT '0.10'
 
--- ============================================================
--- COMPREHENSIVE HLL Benchmark - Multi-Scale Analysis
--- ============================================================
+\set QUIET on
+\timing off
+SET client_min_messages TO WARNING;
 
--- Clean start
+-- Clean tables from previous experiment if any
 DROP TABLE IF EXISTS benchmark_data CASCADE;
 DROP TABLE IF EXISTS results_exact CASCADE;
 DROP TABLE IF EXISTS results_hll CASCADE;
 
-\timing on
 
 -- ============================================================
 -- RESULTS TABLES
@@ -26,7 +25,7 @@ DROP TABLE IF EXISTS results_hll CASCADE;
 CREATE TABLE results_exact (
     test_name TEXT,
     dataset_size BIGINT,
-    row_count BIGINT,
+    row_count BIGINT,  ---redundant
     distinct_count BIGINT,
     duration_ms NUMERIC,
     run_number INTEGER
@@ -36,7 +35,7 @@ CREATE TABLE results_hll (
     test_name TEXT,
     dataset_size BIGINT,
     precision INTEGER,
-    row_count BIGINT,
+    row_count BIGINT,  ---redundant
     hll_estimate NUMERIC,
     exact_count BIGINT,
     relative_error NUMERIC,
@@ -44,6 +43,9 @@ CREATE TABLE results_hll (
     storage_bytes INTEGER,
     run_number INTEGER
 );
+
+SET client_min_messages TO NOTICE;
+\timing on
 
 -- ============================================================
 -- BENCHMARK FUNCTION
@@ -70,15 +72,14 @@ BEGIN
     -- Calculate distinct values
     distinct_vals := FLOOR(data_size * cardinality_pct)::INTEGER;
     
-    msg := '============================================================';
-    RAISE NOTICE '%', msg;
-    msg := 'BENCHMARKING: ' || data_size || ' rows, ~' || distinct_vals || ' distinct values';
-    RAISE NOTICE '%', msg;
-    msg := '============================================================';
-    RAISE NOTICE '%', msg;
-    
-    -- Drop and recreate benchmark table
-    DROP TABLE IF EXISTS benchmark_data;
+    -- msg := '============================================================';
+    -- RAISE NOTICE '%', msg;
+    -- msg := 'STARTING BENCHMARK : ' || data_size || ' rows, ~' || distinct_vals || ' distinct values';
+    -- RAISE NOTICE '%', msg;
+    -- msg := '============================================================';
+    -- RAISE NOTICE '%', msg;
+
+    DROP TABLE IF EXISTS benchmark_data CASCADE;
     CREATE TABLE benchmark_data (
         id SERIAL PRIMARY KEY,
         user_id INTEGER,
@@ -87,8 +88,7 @@ BEGIN
     );
     
     -- Generate data
-    msg := '>>> Generating ' || data_size || ' rows...';
-    RAISE NOTICE '%', msg;
+    RAISE NOTICE '>>> Generating % rows...', data_size;
     
     EXECUTE format('
         INSERT INTO benchmark_data (user_id, session_id)
@@ -102,14 +102,12 @@ BEGIN
     CREATE INDEX idx_user_id ON benchmark_data(user_id);
     ANALYZE benchmark_data;
     
-    msg := '>>> Data generation complete';
-    RAISE NOTICE '%', msg;
+    RAISE NOTICE '>>> Data generation complete';
     
     -- ========================================
     -- EXACT COUNT BENCHMARK
     -- ========================================
-    msg := '>>> Running EXACT COUNT (5 runs)...';
-    RAISE NOTICE '%', msg;
+    RAISE NOTICE '>>> Running EXACT COUNT...';
     
     -- Warmup
     SELECT COUNT(DISTINCT user_id) FROM benchmark_data INTO exact_cnt;
@@ -130,20 +128,17 @@ BEGIN
             i
         );
         
-        msg := '  Run ' || i || ': Exact = ' || exact_cnt || ', Time = ' || ROUND(duration_ms, 2) || ' ms';
-        RAISE NOTICE '%', msg;
+        RAISE NOTICE '  Run %: Exact = %, Time = % ms', i, exact_cnt, ROUND(duration_ms, 2);
     END LOOP;
     
     -- ========================================
     -- HLL BENCHMARK
     -- ========================================
-    msg := '>>> Running HLL tests (precisions ' || precisions::TEXT || ')...';
-    RAISE NOTICE '%', msg;
+    RAISE NOTICE '>>> Running HLL tests (precisions %)...', precisions::TEXT;
     
     -- Iterate over the precisions array passed as an argument
     FOREACH prec IN ARRAY precisions LOOP
-        msg := '  Testing precision ' || prec;
-        RAISE NOTICE '%', msg;
+        RAISE NOTICE '  Testing precision %', prec;
         
         -- Warmup
         SELECT hll_add_agg(hll_hash_integer(user_id), prec) 
@@ -152,7 +147,7 @@ BEGIN
         FOR i IN 1..5 LOOP
             start_time := clock_timestamp();
             
-            -- Adds the hashed user_ids into an HLL and estimates cardinality
+            -- Add the hashed user_ids into an HLL and estimate cardinality
             -- creates new HLL for each run
             SELECT hll_add_agg(hll_hash_integer(user_id), prec) 
             INTO hll_result
@@ -181,69 +176,79 @@ BEGIN
             IF i = 1 THEN
                 msg := '    Estimate: ' || ROUND(hll_estimate) || 
                        ', Error: ' || ROUND(ABS(hll_estimate - exact_cnt) / exact_cnt * 100, 3) || 
-                       '%, Storage: ' || storage_size || ' bytes';
+                       '%, Storage: ' || storage_size || ' bytes' || ', Time: ' || ROUND(duration_ms, 2) ||' ms';
                 RAISE NOTICE '%', msg;
             END IF;
         END LOOP;
     END LOOP;
     
-    msg := '>>> Benchmark complete for ' || data_size || ' rows';
-    RAISE NOTICE '%', msg;
-    RAISE NOTICE '';
+    -- msg := '>>> Benchmark complete for ' || data_size || ' rows';
+    -- RAISE NOTICE '%', msg;
+    -- RAISE NOTICE '';
     
 END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================
--- RUN BENCHMARKS AT MULTIPLE SCALES
+-- RUN BENCHMARKS FOR DIFFERENT DATASET SIZES
 -- ============================================================
 
 \echo ''
 \echo '========================================'
-\echo 'MULTI-SCALE BENCHMARK SUITE'
-\echo 'Using precisions: ' :PRECISIONS_ARRAY
+\echo 'EXPERIMENT 1:'
+\echo 'Estimate cardinality using hll_add_agg and hl_cardinality'
+\echo 'and compare with baseline exact COUNT'
 \echo '========================================'
 \echo ''
 
-\echo '--- Starting benchmark for 10000 rows ---'
-SELECT run_benchmark(10000, :CARDINALITY_PCT, :'PRECISIONS_ARRAY');
-\echo '--- Completed benchmark for 10000 rows ---'
+\echo 'Starting benchmark for 10K rows, ~1K distinct values'
+\echo ''
+SELECT run_benchmark(10000, :CARDINALITY_PCT, ARRAY[10, 12, 14]);
+\echo 'Completed benchmark for 10K rows, ~1K distinct values'
+\echo '========================================'
 \echo ''
 
-\echo '--- Starting benchmark for 100000 rows ---'
-SELECT run_benchmark(100000, :CARDINALITY_PCT, :'PRECISIONS_ARRAY');
-\echo '--- Completed benchmark for 100000 rows ---'
+\echo 'Starting benchmark for 100K rows, ~10K distinct values'
+\echo ''
+SELECT run_benchmark(100000, :CARDINALITY_PCT, ARRAY[10, 12, 14]);
+\echo 'Completed benchmark for 100K rows, ~10K distinct values'
+\echo '========================================'
 \echo ''
 
-\echo '--- Starting benchmark for 1000000 rows ---'
-SELECT run_benchmark(1000000, :CARDINALITY_PCT, :'PRECISIONS_ARRAY');
-\echo '--- Completed benchmark for 1000000 rows ---'
+\echo 'Starting benchmark for 1M rows, ~100K distinct values'
+\echo ''
+SELECT run_benchmark(1000000, :CARDINALITY_PCT, ARRAY[10, 12, 14]);
+\echo 'Completed benchmark for 1M rows, ~100K distinct values'
+\echo '========================================'
 \echo ''
 
-\echo '--- Starting benchmark for 10000000 rows ---'
-SELECT run_benchmark(10000000, :CARDINALITY_PCT, :'PRECISIONS_ARRAY');
-\echo '--- Completed benchmark for 10000000 rows ---'
+\echo 'Starting benchmark for 10M rows, ~1M distinct values'
+\echo ''
+SELECT run_benchmark(10000000, :CARDINALITY_PCT, ARRAY[10, 12, 14]);
+\echo 'Completed benchmark for 10M rows, ~1M distinct values'
+\echo '========================================'
 \echo ''
 
 
 -- ============================================================
--- EXPORT RESULTS
+-- EXPORT TABLES
 -- ============================================================
 
 \echo ''
-\echo '>>> Exporting to CSV...'
-\! mkdir -p '/code/tables'
-\copy results_exact TO '/code/tables/hll_add_agg_exact.csv' CSV HEADER
-\copy results_hll TO '/code/tables/hll_add_agg_hll.csv' CSV HEADER
+\echo '>>> Exporting tables...'
+\! mkdir -p "/code/tables/experiment_1"
+\copy results_exact TO '/code/tables/experiment_1/exact.csv' CSV HEADER
+\copy results_hll TO '/code/tables/experiment_1/hll.csv' CSV HEADER
 
 \echo ''
 \echo '========================================'
-\echo 'BENCHMARK SUITE COMPLETE!'
+\echo 'EXPERIMENT 1 COMPLETE!'
 \echo '========================================'
-\echo 'Results saved to /code/results/'
-\echo '  /code/results/hll_add_agg_exact.csv'
-\echo '  /code/results/hll_add_agg_hll.csv'
--- \echo '  /code/results/hll_add_agg_scaling_results.csv'
 \echo ''
-\echo 'Then run: python plot_results.py'
-\echo '========================================'
+\echo 'Results saved to /code/tables/experiment_1'
+\echo '  /code/tables/experiment_1/exact.csv'
+\echo '  /code/tables/experiment_1/hll.csv'
+\echo ''
+\echo 'Run the following to generate plots:' 
+\echo 'docker compose -f docker-compose.graphs.yml run --rm plotter python plot_experiment_1.py'
+\echo ''

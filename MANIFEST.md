@@ -5,18 +5,13 @@
 ### CPU
 - **Model:** Intel Core i7-11800H
 - **Architecture:** x86_64
-- **Base Frequency:** 2.30 GHz
-- **Measured Frequency:** 2303.999 MHz
 - **Cores:** 8 physical cores
-- **Threads:** 16 threads (with Hyper-Threading)
 - **Generation:** 11th Gen Intel Core (Tiger Lake-H)
 
 ### Memory
-- **Total RAM:** 32 GB (31 GiB usable)
+- **Total RAM:** 32 GB
 - **Type:** DDR4
-- **Available during tests:** ~30 GiB free
 - **Used during tests:** <1 GB
-- **Swap:** 8 GB configured (0B used during benchmarks)
 
 ### Operating System
 - **HostbOS:** Windows 11 (x86_64)
@@ -58,14 +53,11 @@ Comment: type for storing hyperloglog data
 
 Python 3.12.10
 
-### Required Packages (with versions)
+### Required Packages
 ```
-numpy==1.23.2               # Numerical computing
-pandas==2.0.1               # Data analysis
-matplotlib==3.7.1           # Plotting
-matplotlib-inline==0.1.6    # Inline plotting support
-seaborn==0.13.2             # Statistical visualization
+numpy
+pandas
+matplotlib
+matplotlib-inline
+seaborn
 ```
-
-
-
