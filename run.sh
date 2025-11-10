@@ -16,7 +16,7 @@ docker-compose \
 echo "Waiting for pgdb to be ready..."
 
 # can successfully connect to the 'mydb' database (-d mydb)
-while ! docker exec pgdb pg_isready -q -U postgres -d mydb; do
+while ! docker exec pgdb pg_isready -q -U myuser -d mydb; do
     printf "."
     sleep 1
 done
@@ -24,6 +24,7 @@ done
 echo "Database is ready!"
 # --- End Wait ---
 
+# sleep 10
 
 docker exec pgdb psql -f experiment_1.sql
 docker exec plotter python plot_experiment_1.py
