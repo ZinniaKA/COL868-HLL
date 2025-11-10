@@ -251,4 +251,3 @@ SELECT run_benchmark(10000000, :CARDINALITY_PCT, ARRAY[10, 12, 14]);
 \echo ''
 \echo 'Run the following to generate plots:' 
 \echo 'docker compose -f docker-compose.graphs.yml run --rm plotter python plot_experiment_1.py'
-\echo ''

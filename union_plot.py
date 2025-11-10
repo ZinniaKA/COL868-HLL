@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-HLL Union Benchmark Visualization - MINIMAL
-Performs Phase 4 analysis (aggregation/calculation) and generates only two core plots:
+HLL Union Plotting Script-
+Analyses tables  and generates the following plots:
 1. HLL Union Performance (Query Time, Speedup, Error, Storage)
 2. Precision Trade-offs (Error vs Speed, Error vs Storage, Speedup)
 """
@@ -18,31 +18,29 @@ plt.rcParams['figure.figsize'] = (14, 10)
 plt.rcParams['font.size'] = 10
 
 # Create output directory
-output_dir = Path('./plots/hll_union')
+output_dir = Path('./plots/experiment_2')
 output_dir.mkdir(parents=True, exist_ok=True)
-tables_dir = Path('./tables/hll_union')
+tables_dir = Path('./tables/experiment_2')
 
-# Load raw detailed data
-print("Loading raw benchmark results for analysis...")
+# Load data
 try:
-    # These two files are the *only* inputs from the SQL script
-    union_df = pd.read_csv(tables_dir / 'union_detailed.csv')
-    exact_df = pd.read_csv(tables_dir / 'exact_detailed.csv')
+    union_df = pd.read_csv(tables_dir / 'union.csv')
+    exact_df = pd.read_csv(tables_dir / 'exact.csv')
 except FileNotFoundError as e:
-    print(f"Error: One or more raw data files not found. Ensure the SQL script ran successfully.")
+    print(f"✗ CSV files not found at {tables_dir}/")
+    print("  Run the benchmark first to generate CSV files!")
     exit(1)
 
-print(f"Loaded {len(union_df)} union test records")
-print(f"Loaded {len(exact_df)} exact test records")
+print(f"✓ Loaded data from union.csv and exact.csv")
 
 
 # ============================================================================
-# PHASE 4: RESULTS ANALYSIS (Required for plotting logic)
+# Analyse experiment 2 tables
 # ============================================================================
 print("\nPerforming Data Aggregation and Calculation...")
 precisions = [10, 12, 14]
 
-# 1. Aggregate union stats
+# Aggregate union stats
 union_stats = union_df.groupby(['precision', 'num_days'], as_index=False).agg(
     avg_estimate=('estimated_count', 'mean'),
     union_time_ms=('query_time_ms', 'mean'),
@@ -50,14 +48,14 @@ union_stats = union_df.groupby(['precision', 'num_days'], as_index=False).agg(
     total_sketch_bytes=('total_sketch_size_bytes', 'max')
 )
 
-# 2. Aggregate exact stats
+# Aggregate exact stats
 exact_stats = exact_df.groupby('num_days', as_index=False).agg(
     exact_count=('exact_count', 'mean'),
     exact_time_ms=('query_time_ms', 'mean'),
     exact_stddev_ms=('query_time_ms', 'std')
 )
 
-# 3. Join and calculate derived metrics
+# Join and calculate derived metrics
 comparison_df = union_stats.merge(exact_stats, on='num_days')
 
 comparison_df['error_absolute'] = abs(comparison_df['avg_estimate'] - comparison_df['exact_count'])
@@ -65,16 +63,16 @@ comparison_df['error_pct'] = (comparison_df['error_absolute'] / comparison_df['e
 comparison_df['speedup_factor'] = comparison_df['exact_time_ms'] / comparison_df['union_time_ms']
 comparison_df['sketch_size_kb'] = comparison_df['total_sketch_bytes'] / 1024
 
-# Efficiency score is still needed for a comprehensive best-case analysis, even if not plotted directly
+# Calculate efficiency score
 comparison_df['efficiency_score'] = comparison_df['speedup_factor'] / comparison_df['error_pct']
 
-# Save the generated comparison data (optional, but good practice)
+# Save the generated comparison data (for reference if needed)
 comparison_df.to_csv(tables_dir / 'comparison.csv', index=False)
 print(f"Saved aggregated results to: {tables_dir / 'comparison.csv'}")
 
 
 # ============================================================================
-# PLOT 1: Speedup Comparison by Time Window (hll_union_performance.png)
+# PLOT 1: hll_union vs exact COUNT
 # ============================================================================
 print("\nGenerating Plot 1: HLL Union Performance...")
 
@@ -123,8 +121,8 @@ ax2.grid(True, alpha=0.3)
 # Add value labels
 for precision in precisions:
     data = comparison_df[comparison_df['precision'] == precision].sort_values('num_days')
-    for x_val, y_val in zip(data['num_days'], data['speedup_factor']):
-        ax2.text(x_val, y_val + 0.5, f'{y_val:.1f}x', ha='center', fontsize=8)
+    # for x_val, y_val in zip(data['num_days'], data['speedup_factor']):
+    #     ax2.text(x_val, y_val + 0.5, f'{y_val:.1f}x', ha='center', fontsize=8)
 
 # Plot 1c: Accuracy (Error %)
 ax3 = axes[1, 0]
@@ -175,7 +173,7 @@ print(f"Saved: {output_dir / 'hll_union_performance.png'}")
 
 
 # ============================================================================
-# PLOT 3: Precision Trade-offs (precision_tradeoffs.png)
+# PLOT 2: Precision Trade-offs (precision_tradeoffs.png)
 # ============================================================================
 print("\nGenerating Plot 2: Precision Trade-offs...")
 
@@ -184,17 +182,17 @@ fig.suptitle('Precision Trade-off Analysis', fontsize=16, fontweight='bold')
 
 colors_prec = ['#3498db', '#e74c3c', '#2ecc71']
 
-# Plot 3a: Error vs Query Time
+# Plot 2a: Error vs Query Time
 ax1 = axes[0]
 for precision, color in zip(precisions, colors_prec):
     data = comparison_df[comparison_df['precision'] == precision]
     avg_error = data['error_pct'].mean()
     avg_time = data['union_time_ms'].mean()
     
-    ax1.scatter(avg_error, avg_time, s=500, alpha=0.6, color=color, 
+    ax1.scatter(avg_error, avg_time, s=150, alpha=0.6, color=color, 
                 edgecolor='black', linewidth=2, label=f'p={precision}')
-    ax1.text(avg_error, avg_time, f'p={precision}', ha='center', va='center',
-            fontweight='bold', fontsize=11)
+    # ax1.text(avg_error, avg_time, f'p={precision}', ha='center', va='center',
+            # fontweight='bold', fontsize=11)
 
 ax1.set_xlabel('Average Error (%)', fontweight='bold')
 ax1.set_ylabel('Average Query Time (ms)', fontweight='bold')
@@ -202,17 +200,17 @@ ax1.set_title('Error vs Speed Trade-off')
 ax1.legend()
 ax1.grid(True, alpha=0.3)
 
-# Plot 3b: Error vs Storage
+# Plot 2b: Error vs Storage
 ax2 = axes[1]
 for precision, color in zip(precisions, colors_prec):
     data = comparison_df[comparison_df['precision'] == precision]
     avg_error = data['error_pct'].mean()
     avg_storage = data['sketch_size_kb'].mean()
     
-    ax2.scatter(avg_storage, avg_error, s=500, alpha=0.6, color=color,
+    ax2.scatter(avg_storage, avg_error, s=150, alpha=0.6, color=color,
                 edgecolor='black', linewidth=2, label=f'p={precision}')
-    ax2.text(avg_storage, avg_error, f'p={precision}', ha='center', va='center',
-            fontweight='bold', fontsize=11)
+    # ax2.text(avg_storage, avg_error, f'p={precision}', ha='center', va='center',
+    #         fontweight='bold', fontsize=11)
 
 ax2.set_xlabel('Average Storage (KB)', fontweight='bold')
 ax2.set_ylabel('Average Error (%)', fontweight='bold')
@@ -220,14 +218,15 @@ ax2.set_title('Error vs Storage Trade-off')
 ax2.legend()
 ax2.grid(True, alpha=0.3)
 
-# Plot 3c: Speedup by Precision
+# Plot 2c: Speedup by Precision
 ax3 = axes[2]
 speedup_by_prec = comparison_df.groupby('precision')['speedup_factor'].agg(['mean', 'std'])
 x_pos = np.arange(len(precisions))
 
 bars = ax3.bar(x_pos, speedup_by_prec['mean'], yerr=speedup_by_prec['std'],
-               color=colors_prec, alpha=0.7, edgecolor='black', linewidth=1.5,
-               capsize=5, error_kw={'linewidth': 2})
+               color=colors_prec, alpha=0.7, edgecolor='black', linewidth=1.5
+                ,capsize=5, error_kw={'linewidth': 2} #black line - standard deviation
+               )
 
 ax3.set_xlabel('Precision', fontweight='bold')
 ax3.set_ylabel('Average Speedup Factor (x)', fontweight='bold')
@@ -245,4 +244,5 @@ plt.tight_layout()
 plt.savefig(output_dir / 'precision_tradeoffs.png', dpi=300, bbox_inches='tight')
 print(f"Saved: {output_dir / 'precision_tradeoffs.png'}")
 
-print("\n✨ Minimal visualization complete!")
+print("\n✓ All plots generated successfully!")
+print(f"  Files saved in: {output_dir}")

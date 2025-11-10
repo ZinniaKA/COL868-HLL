@@ -1,13 +1,10 @@
--- ============================================================================
--- HLL UNION BENCHMARK - Testing hll_union_agg Performance
--- ============================================================================
--- Focuses on generating raw data and timed test runs only.
--- All data analysis and derived metrics are now handled in union_plot.py.
--- ============================================================================
+-- Testing hll_union_agg
 
-\timing on
+\set QUIET on
+\timing off
+SET client_min_messages TO WARNING;
 
--- Clean up existing tables
+-- Clean tables from previous experiment if any
 DROP TABLE IF EXISTS events CASCADE;
 DROP TABLE IF EXISTS daily_sketches CASCADE;
 DROP TABLE IF EXISTS results_union CASCADE;
@@ -15,8 +12,9 @@ DROP TABLE IF EXISTS results_exact_reagg CASCADE;
 
 \echo ''
 \echo '========================================'
-\echo 'SETUP: Generating Test Data'
+\echo 'Generating Test Data'
 \echo '========================================'
+\echo ''
 
 -- Create main events table
 CREATE TABLE events (
@@ -28,7 +26,7 @@ CREATE TABLE events (
 
 \echo '>>> Generating 1M events over 90 days...'
 \echo '    (10K-15K events per day, ~50K unique users total)'
-
+\echo ''
 SELECT setseed(0.5);
 
 -- Generate realistic event data
@@ -60,12 +58,12 @@ SELECT
 FROM events;
 
 -- ============================================================================
--- PHASE 1: Pre-compute Daily Sketches at Different Precisions
+-- STEP 1: Pre-compute Daily Sketches at Different Precisions
 -- ============================================================================
 
 \echo ''
 \echo '========================================'
-\echo 'PHASE 1: Pre-computing Daily Sketches'
+\echo 'STEP 1: Pre-computing Daily Sketches'
 \echo '========================================'
 
 CREATE TABLE daily_sketches (
@@ -98,12 +96,12 @@ ANALYZE daily_sketches;
 \echo '>>> Daily sketches created!'
 
 -- ============================================================================
--- PHASE 2: Benchmark HLL Union Aggregation (Raw Timing Export)
+-- STEP 2: Run HLL Union Aggregation (raw timings)
 -- ============================================================================
 
 \echo ''
 \echo '========================================'
-\echo 'PHASE 2: Benchmarking hll_union_agg (Raw Timings)'
+\echo 'PHASE 2: Run hll_union_agg'
 \echo '========================================'
 
 CREATE TABLE results_union (
@@ -115,6 +113,9 @@ CREATE TABLE results_union (
     query_time_ms NUMERIC,
     total_sketch_size_bytes BIGINT
 );
+
+SET client_min_messages TO NOTICE;
+\timing on
 
 DO $$
 DECLARE
@@ -129,6 +130,7 @@ DECLARE
 BEGIN
     FOREACH v_days IN ARRAY ARRAY[7, 14, 30, 60, 90] LOOP
         FOREACH v_precision IN ARRAY ARRAY[10, 12, 14] LOOP
+            RAISE NOTICE '';
             RAISE NOTICE '>>> Testing: % days, precision %', v_days, v_precision;
             FOR v_run IN 1..5 LOOP
                 v_start := clock_timestamp();
@@ -160,12 +162,12 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- PHASE 3: Benchmark Exact Re-aggregation (Raw Timing Export)
+-- STEP 3: Run Exact Re-aggregation (raw timings)
 -- ============================================================================
 
 \echo ''
 \echo '========================================'
-\echo 'PHASE 3: Benchmarking Exact Re-aggregation (Raw Timings)'
+\echo 'STEP 3: Run Exact Re-aggregation'
 \echo '========================================'
 
 CREATE TABLE results_exact_reagg (
@@ -186,6 +188,7 @@ DECLARE
     v_time_ms NUMERIC;
 BEGIN
     FOREACH v_days IN ARRAY ARRAY[7, 14, 30, 60, 90] LOOP
+        RAISE NOTICE '';
         RAISE NOTICE '>>> Testing exact COUNT(DISTINCT) for % days', v_days;
         FOR v_run IN 1..5 LOOP
             v_start := clock_timestamp();
@@ -211,26 +214,27 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- PHASE 4: Export Raw Results (For Python Analysis)
+-- STEP 4: Export Tables
 -- ============================================================================
 
 \echo ''
-\echo '========================================'
-\echo 'EXPORTING RAW RESULTS'
-\echo '========================================'
+\echo '>>> Exporting tables...'
 
 -- Create directories first
-\! mkdir -p /code/tables/hll_union
+\! mkdir -p '/code/tables/experiment_2'
 
 -- Export raw timing data
-\copy results_union TO '/code/tables/hll_union/union_detailed.csv' CSV HEADER
-\copy results_exact_reagg TO '/code/tables/hll_union/exact_detailed.csv' CSV HEADER
+\copy results_union TO '/code/tables/experiment_2/union.csv' CSV HEADER
+\copy results_exact_reagg TO '/code/tables/experiment_2/exact.csv' CSV HEADER
 
 \echo ''
 \echo '========================================'
-\echo 'BENCHMARK COMPLETE!'
+\echo 'EXPERIMENT 2 COMPLETE!'
 \echo '========================================'
 \echo ''
-\echo 'Next steps:'
-\echo '  1. Visualize and analyze results: python hll_union_plot.py'
-\echo '========================================'
+\echo 'Results saved to /code/tables/experiment_2'
+\echo '  /code/tables/experiment_2/exact.csv'
+\echo '  /code/tables/experiment_2/union.csv'
+\echo ''
+\echo 'Run the following to generate plots:' 
+\echo 'docker compose -f docker-compose.graphs.yml run --rm plotter python plot_experiment_2.py'

@@ -54,11 +54,12 @@ SELECT #items FROM test_hll WHERE id = 1;
 
 Test **HLL approximate counting** using **hll_add_agg** and **hll_cardinality** and  compare it against baseline **exact COUNT(DISTINCT)**
 
-HLL precision: 10, 12, 14
-Datasets: 10K, 100K, 1M, 10M rows
-Cardinality: 10% of dataset size
-Data Type: Integer only
-Distribution: Uniform random (not representative of real-world skew)
+**Configuration:**
+- HLL precision: 10, 12, 14
+- Datasets: 10K, 100K, 1M, 10M rows
+- Cardinality: 10% of dataset size
+- Data Type: Integer only
+- Distribution: Uniform random (not representative of real-world skew)
 
 ```bash
 # Run experiment
@@ -68,28 +69,39 @@ docker exec -it pgdb psql -f experiment_1.sql
 docker compose -f docker-compose.graphs.yml run --rm plotter python plot_experiment_1.py
 ```
 
+**Plots generated:**
+
+- Query latency ( for hll precisions and exact COUNT)
+- Speedup factors across scales for each precision compared to baseline
+- Accuracy (relative error %) across precisions
+- Storage vs dataset size for hll
+- Accuracy vs storage trade-off across precisions
+
 ### Experiment 2:
 
-Test **hll_union_agg** by evaluateing it against real-world analytics pattern - pre-compute daily sketches, union for any time range
+Test **hll_union_agg** performance by evaluating real-world analytics pattern where daily sketches are pre-computed once, then unioned on-demand for any time range.
 
-Union performance across time windows (7-90 days)
-Speedup vs exact re-aggregation
-Nested unions (daily → weekly → monthly)
-Storage efficiency
-Scalability with number of sketches
+**What it tests:**
+- Union performance across time windows (7, 14, 30, 60, 90 days)
+- Compares performance with exact re-aggregation - latency, speedup, relative error
+- Storage efficiency across precisions
+- Compares precisions - latency, error ,speedup
 
-Dataset: 1.28M events over 90 days, 50K unique usersCardinality: 10% of dataset size
-Distribution: Power-law (realistic user activity)
+**Dataset:**
+- 1.28M events over 90 days
+- ~50K unique users total
+- ~10K-15K events per day
 
-10% super-active users
-30% active users
-60% casual users
+**User Distribution (Power-law - Realistic):**
+- 10% super-active users (0-1K user IDs)
+- 30% active users (0-10K user IDs)  
+- 60% casual users (0-50K user IDs)
 
+**Test Configuration:**
+- Precisions tested: 10, 12, 14
+- Time windows: 7, 14, 30, 60, 90 days
 
-Data Type: Integer user IDs
-Cardinality: 50K unique users, variable daily activity
-Pattern: Simulates real-world analytics workload
-
+*Note:* Pre-computing daily sketches enables instant queries for any time range (e.g., "last 30 days unique users") without re-scanning raw data.
 
 ```bash
 # Run experiment
